@@ -5,7 +5,7 @@ from groq import Groq
 
 
 # =========================================================
-# PAGE SETTINGS
+# PAGE CONFIGURATION
 # =========================================================
 
 st.set_page_config(
@@ -22,60 +22,82 @@ st.set_page_config(
 GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 
-groq_client = Groq(
-    api_key=GROQ_API_KEY
-)
+groq_client = Groq(api_key=GROQ_API_KEY)
 
 
 # =========================================================
-# PAKISTAN CITIES
+# CITY + AREA DATABASE
 # =========================================================
 
-CITIES = {
+LOCATIONS = {
+
     "Lahore": {
-        "latitude": 31.5204,
-        "longitude": 74.3587
-    },
 
-    "Karachi": {
-        "latitude": 24.8607,
-        "longitude": 67.0011
-    },
+        "Gulberg": {
+            "latitude": 31.5100,
+            "longitude": 74.3500
+        },
 
-    "Islamabad": {
-        "latitude": 33.6844,
-        "longitude": 73.0479
-    },
+        "MM Alam Road": {
+            "latitude": 31.5143,
+            "longitude": 74.3560
+        },
 
-    "Rawalpindi": {
-        "latitude": 33.5651,
-        "longitude": 73.0169
-    },
+        "Liberty Market": {
+            "latitude": 31.5116,
+            "longitude": 74.3436
+        },
 
-    "Faisalabad": {
-        "latitude": 31.4504,
-        "longitude": 73.1350
-    },
+        "DHA Phase 4": {
+            "latitude": 31.4697,
+            "longitude": 74.4080
+        },
 
-    "Multan": {
-        "latitude": 30.1575,
-        "longitude": 71.5249
-    },
+        "DHA Phase 5": {
+            "latitude": 31.4667,
+            "longitude": 74.4100
+        },
 
-    "Peshawar": {
-        "latitude": 34.0151,
-        "longitude": 71.5249
-    },
+        "DHA Phase 6": {
+            "latitude": 31.4730,
+            "longitude": 74.4320
+        },
 
-    "Gujranwala": {
-        "latitude": 32.1877,
-        "longitude": 74.1945
+        "Johar Town": {
+            "latitude": 31.4697,
+            "longitude": 74.2728
+        },
+
+        "Model Town": {
+            "latitude": 31.4833,
+            "longitude": 74.3269
+        },
+
+        "Bahria Town": {
+            "latitude": 31.3670,
+            "longitude": 74.1870
+        },
+
+        "Wapda Town": {
+            "latitude": 31.4430,
+            "longitude": 74.2730
+        },
+
+        "Faisal Town": {
+            "latitude": 31.4900,
+            "longitude": 74.3000
+        },
+
+        "Garden Town": {
+            "latitude": 31.4960,
+            "longitude": 74.3240
+        }
     }
 }
 
 
 # =========================================================
-# FIND NEARBY RESTAURANTS
+# GOOGLE PLACES - FIND RESTAURANTS
 # =========================================================
 
 def find_restaurants(latitude, longitude, radius_km):
@@ -104,7 +126,7 @@ def find_restaurants(latitude, longitude, radius_km):
             "restaurant"
         ],
 
-        "maxResultCount": 10,
+        "maxResultCount": 20,
 
         "locationRestriction": {
 
@@ -122,38 +144,43 @@ def find_restaurants(latitude, longitude, radius_km):
         "rankPreference": "DISTANCE"
     }
 
-    response = requests.post(
-        url,
-        headers=headers,
-        json=payload,
-        timeout=30
-    )
+    try:
 
-    if response.status_code != 200:
+        response = requests.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
 
-        st.error("Google Places API error")
+        if response.status_code != 200:
 
-        st.code(response.text)
+            st.error("Google Places API error")
+
+            st.code(response.text)
+
+            return []
+
+        data = response.json()
+
+        return data.get("places", [])
+
+    except Exception as e:
+
+        st.error("Could not connect to Google Places API.")
+
+        st.code(str(e))
 
         return []
 
-    data = response.json()
-
-    return data.get(
-        "places",
-        []
-    )
-
 
 # =========================================================
-# GET RESTAURANT DETAILS
+# GOOGLE PLACES - GET RESTAURANT DETAILS
 # =========================================================
 
 def get_restaurant_details(place_id):
 
-    url = (
-        f"https://places.googleapis.com/v1/places/{place_id}"
-    )
+    url = f"https://places.googleapis.com/v1/places/{place_id}"
 
     headers = {
 
@@ -172,23 +199,31 @@ def get_restaurant_details(place_id):
         )
     }
 
-    response = requests.get(
-        url,
-        headers=headers,
-        timeout=30
-    )
+    try:
 
-    if response.status_code != 200:
-
-        st.error(
-            "Could not get restaurant details."
+        response = requests.get(
+            url,
+            headers=headers,
+            timeout=30
         )
 
-        st.code(response.text)
+        if response.status_code != 200:
+
+            st.error("Could not get restaurant details.")
+
+            st.code(response.text)
+
+            return {}
+
+        return response.json()
+
+    except Exception as e:
+
+        st.error("Could not connect to Google Places API.")
+
+        st.code(str(e))
 
         return {}
-
-    return response.json()
 
 
 # =========================================================
@@ -197,19 +232,18 @@ def get_restaurant_details(place_id):
 
 def extract_reviews(details):
 
-    reviews = details.get(
-        "reviews",
-        []
-    )
+    reviews = details.get("reviews", [])
 
     review_texts = []
 
     for review in reviews:
 
-        text = (
-            review
-            .get("text", {})
-            .get("text", "")
+        text = review.get(
+            "text",
+            {}
+        ).get(
+            "text",
+            ""
         )
 
         if text:
@@ -220,7 +254,7 @@ def extract_reviews(details):
 
 
 # =========================================================
-# CALCULATE DISTANCE
+# DISTANCE CALCULATION
 # =========================================================
 
 def calculate_distance(
@@ -233,7 +267,6 @@ def calculate_distance(
     earth_radius = 6371
 
     lat1 = math.radians(lat1)
-
     lat2 = math.radians(lat2)
 
     delta_lat = math.radians(
@@ -251,11 +284,8 @@ def calculate_distance(
         +
 
         math.cos(lat1)
-        *
-        math.cos(lat2)
-        *
-        math.sin(delta_lon / 2) ** 2
-
+        * math.cos(lat2)
+        * math.sin(delta_lon / 2) ** 2
     )
 
     c = 2 * math.atan2(
@@ -267,7 +297,7 @@ def calculate_distance(
 
 
 # =========================================================
-# PRICE LEVEL
+# PRICE FORMATTER
 # =========================================================
 
 def format_price(price_level):
@@ -316,16 +346,20 @@ def analyze_restaurant(
 
         f"Customer Review {i + 1}: {review}"
 
-        for i, review in enumerate(reviews)
+        for i, review
+        in enumerate(reviews)
     )
 
     prompt = f"""
+
 You are an evidence-based restaurant review analyst.
 
 Restaurant:
 {restaurant_name}
 
+
 CUSTOMER REVIEWS:
+
 {review_text}
 
 
@@ -348,7 +382,8 @@ Do not invent dishes.
 
 Identify things customers liked.
 
-Focus on repeated or meaningful positive feedback.
+Focus on repeated or meaningful
+positive feedback.
 
 
 3. CUSTOMER COMPLAINTS
@@ -371,8 +406,8 @@ Include issues such as:
 
 Research dishes that customers explicitly mentioned.
 
-Use web research only to provide general factual
-context about those dishes.
+Use web research only to provide
+general factual context about those dishes.
 
 IMPORTANT:
 
@@ -432,44 +467,47 @@ DISH RESEARCH
 CUSTOMER-BACKED VERDICT
 
 CONFIDENCE
+
 """
 
-    response = groq_client.chat.completions.create(
+    try:
 
-        model="groq/compound",
+        response = groq_client.chat.completions.create(
 
-        messages=[
+            model="groq/compound",
 
-            {
-                "role": "system",
+            messages=[
 
-                "content": (
-                    "You are a careful restaurant "
-                    "review analyst. Separate "
-                    "customer evidence from "
-                    "external research."
-                )
-            },
+                {
+                    "role": "system",
 
-            {
-                "role": "user",
+                    "content": (
+                        "You are a careful restaurant "
+                        "review analyst. Separate "
+                        "customer evidence from "
+                        "external research."
+                    )
+                },
 
-                "content": prompt
-            }
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        )
 
-        ]
-    )
+        return response.choices[0].message.content
 
-    return (
-        response
-        .choices[0]
-        .message
-        .content
-    )
+    except Exception as e:
+
+        return (
+            "AI analysis could not be completed.\n\n"
+            f"Error: {str(e)}"
+        )
 
 
 # =========================================================
-# STREAMLIT USER INTERFACE
+# APP HEADER
 # =========================================================
 
 st.title(
@@ -491,38 +529,79 @@ st.sidebar.header(
     "Restaurant Search"
 )
 
+
+# ---------------------------------------------------------
+# CITY
+# ---------------------------------------------------------
+
 city = st.sidebar.selectbox(
+
     "Select city",
-    list(CITIES.keys())
+
+    list(LOCATIONS.keys())
 )
 
+
+# ---------------------------------------------------------
+# AREA
+# ---------------------------------------------------------
+
+areas = list(
+    LOCATIONS[city].keys()
+)
+
+area = st.sidebar.selectbox(
+
+    "Select area",
+
+    areas
+)
+
+
+# ---------------------------------------------------------
+# SEARCH RADIUS
+# ---------------------------------------------------------
+
 radius = st.sidebar.slider(
+
     "Search radius (km)",
+
     min_value=1,
+
     max_value=10,
+
     value=3
 )
 
 
 # =========================================================
-# SEARCH BUTTON
+# SELECTED AREA COORDINATES
+# =========================================================
+
+selected_location = LOCATIONS[city][area]
+
+search_latitude = selected_location["latitude"]
+
+search_longitude = selected_location["longitude"]
+
+
+# =========================================================
+# FIND RESTAURANTS BUTTON
 # =========================================================
 
 if st.sidebar.button(
     "Find Restaurants"
 ):
 
-    city_data = CITIES[city]
-
     with st.spinner(
-        "Finding nearby restaurants..."
+        f"Finding restaurants around {area}..."
     ):
 
         restaurants = find_restaurants(
 
-            city_data["latitude"],
+            search_latitude,
 
-            city_data["longitude"],
+            search_longitude,
 
             radius
         )
@@ -530,20 +609,27 @@ if st.sidebar.button(
     if not restaurants:
 
         st.warning(
-            "No restaurants found."
+            f"No restaurants found around "
+            f"{area} within {radius} km."
         )
 
     else:
 
         st.success(
+
             f"Found {len(restaurants)} restaurants "
-            f"in {city}."
+            f"around {area}."
         )
 
-        # Store restaurants in session
         st.session_state["restaurants"] = restaurants
 
         st.session_state["city"] = city
+
+        st.session_state["area"] = area
+
+        st.session_state["search_latitude"] = search_latitude
+
+        st.session_state["search_longitude"] = search_longitude
 
 
 # =========================================================
@@ -556,67 +642,113 @@ if "restaurants" in st.session_state:
 
     city = st.session_state["city"]
 
-    city_data = CITIES[city]
+    area = st.session_state["area"]
+
+    search_latitude = st.session_state[
+        "search_latitude"
+    ]
+
+    search_longitude = st.session_state[
+        "search_longitude"
+    ]
+
+
+    # -----------------------------------------------------
+    # SEARCH SUMMARY
+    # -----------------------------------------------------
+
+    st.markdown(
+        f"### 📍 Restaurants around {area}, {city}"
+    )
+
+    st.caption(
+        "Results are based on the selected area "
+        "and search radius."
+    )
+
+
+    # -----------------------------------------------------
+    # RESTAURANT CARDS
+    # -----------------------------------------------------
 
     for index, restaurant in enumerate(
         restaurants
     ):
 
-        name = (
-            restaurant
-            .get("displayName", {})
-            .get(
-                "text",
-                "Unknown restaurant"
-            )
+        name = restaurant.get(
+            "displayName",
+            {}
+        ).get(
+            "text",
+            "Unknown restaurant"
         )
+
 
         rating = restaurant.get(
             "rating",
             "N/A"
         )
 
+
         review_count = restaurant.get(
             "userRatingCount",
             0
         )
 
+
         address = restaurant.get(
+
             "formattedAddress",
+
             "Address not available"
         )
 
+
         price = format_price(
+
             restaurant.get(
                 "priceLevel"
             )
         )
+
 
         location = restaurant.get(
             "location",
             {}
         )
 
+
         restaurant_lat = location.get(
             "latitude"
         )
+
 
         restaurant_lon = location.get(
             "longitude"
         )
 
+
+        # -------------------------------------------------
+        # DISTANCE
+        # -------------------------------------------------
+
         distance = "N/A"
 
         if (
+
             restaurant_lat is not None
-            and restaurant_lon is not None
+
+            and
+
+            restaurant_lon is not None
+
         ):
 
             distance_value = calculate_distance(
 
-                city_data["latitude"],
+                search_latitude,
 
-                city_data["longitude"],
+                search_longitude,
 
                 restaurant_lat,
 
@@ -629,20 +761,20 @@ if "restaurants" in st.session_state:
 
 
         # -------------------------------------------------
-        # RESTAURANT CARD
+        # RESTAURANT DISPLAY
         # -------------------------------------------------
 
         st.markdown("---")
+
 
         col1, col2 = st.columns(
             [3, 1]
         )
 
+
         with col1:
 
-            st.subheader(
-                name
-            )
+            st.subheader(name)
 
             st.write(
                 f"⭐ Rating: {rating}"
@@ -653,7 +785,8 @@ if "restaurants" in st.session_state:
             )
 
             st.write(
-                f"📍 Distance: {distance}"
+                f"📍 Distance from {area}: "
+                f"{distance}"
             )
 
             st.write(
@@ -667,27 +800,43 @@ if "restaurants" in st.session_state:
 
         with col2:
 
-            # Google Maps button
+            # ---------------------------------------------
+            # GOOGLE MAPS
+            # ---------------------------------------------
 
             if (
+
                 restaurant_lat is not None
-                and restaurant_lon is not None
+
+                and
+
+                restaurant_lon is not None
+
             ):
 
                 maps_url = (
+
                     "https://www.google.com/maps/search/"
+
                     "?api=1"
-                    f"&query={restaurant_lat},"
+
+                    f"&query="
+                    f"{restaurant_lat},"
                     f"{restaurant_lon}"
                 )
 
+
                 st.link_button(
+
                     "🗺️ Google Maps",
+
                     maps_url
                 )
 
 
-            # AI button
+            # ---------------------------------------------
+            # AI ANALYSIS
+            # ---------------------------------------------
 
             analyze_button = st.button(
 
@@ -698,13 +847,13 @@ if "restaurants" in st.session_state:
 
 
         # -------------------------------------------------
-        # AI ANALYSIS
+        # AI ANALYSIS RESULT
         # -------------------------------------------------
 
         if analyze_button:
 
             with st.spinner(
-                "Reading customer reviews..."
+                "Reading available customer reviews..."
             ):
 
                 details = get_restaurant_details(
@@ -719,6 +868,7 @@ if "restaurants" in st.session_state:
             if not reviews:
 
                 st.warning(
+
                     "No customer review text "
                     "was available for this restaurant."
                 )
@@ -726,12 +876,16 @@ if "restaurants" in st.session_state:
             else:
 
                 st.info(
+
                     f"Analyzing {len(reviews)} "
                     "available customer reviews."
                 )
 
+
                 with st.spinner(
-                    "Analyzing reviews and researching dishes..."
+
+                    "Analyzing reviews "
+                    "and researching dishes..."
                 ):
 
                     analysis = analyze_restaurant(
@@ -740,6 +894,7 @@ if "restaurants" in st.session_state:
 
                         reviews
                     )
+
 
                 st.markdown(
                     "### 🤖 Customer-Backed Analysis"
@@ -757,6 +912,7 @@ if "restaurants" in st.session_state:
 st.markdown("---")
 
 st.caption(
+
     "Recommendations are based on available "
     "customer-review evidence. External dish "
     "research is used only as supporting context."
